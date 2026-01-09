@@ -1,21 +1,19 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
 import { getFunctions } from 'firebase/functions';
+import { getAuth } from "firebase/auth"; // <-- AÑADIDO
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBewile8uMnTrciA5n1GsTsPAzYu246-Ps",
-  authDomain: "informe-c87b9.firebaseapp.com",
-  projectId: "informe-c87b9",
-  storageBucket: "informe-c87b9.appspot.com",
-  messagingSenderId: "27004985138",
-  appId: "1:27004985138:web:5f079f33709fd4bf04012b",
-  measurementId: "G-Y9340Y986S"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const firestore = getFirestore(app);
-const functions = getFunctions(app);
 
-export { app, firestore, functions };
+export const firestore = getFirestore(app);
+export const functions = getFunctions(app);
+export const auth = getAuth(app); // <-- AÑADIDO

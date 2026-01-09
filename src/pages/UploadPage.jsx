@@ -15,7 +15,8 @@ import DataUploader from '../components/DataUploader';
 
 const PREVIEW_ROWS = 100;
 
-const UploadPage = () => {
+// El componente ahora recibe el prop `user`
+const UploadPage = ({ user }) => {
   // State
   const [uploaderKey, setUploaderKey] = useState(0);
   const [isDeleting, setIsDeleting] = useState({base: false, impl: false});
@@ -38,27 +39,30 @@ const UploadPage = () => {
   
   const handleDeleteCollection = async (collectionName) => {
     const prettyName = collectionName.replace(/_/g, ' ');
-    if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de la colección \"${prettyName}\"? Esta acción no se puede deshacer y puede tardar varios minutos.`)) return;
+    if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de la colección \"${prettyName}\"? Esta acción no se puede deshacer.`)) return;
 
     const deletingKey = collectionName === 'Base Pospago' ? 'base' : 'impl';
     setIsDeleting(prev => ({...prev, [deletingKey]: true}));
-    setDeleteMessage({type: 'info', text: `Iniciando borrado de \"${prettyName}\"...`});
+    setDeleteMessage({type: 'info', text: `Iniciando borrado seguro de \"${prettyName}\"...`});
 
     try {
         const deleteCollection = httpsCallable(functions, 'deleteAllDocumentsInCollection');
-        await deleteCollection({ collectionPath: collectionName });
+        const result = await deleteCollection({ collectionPath: collectionName });
 
-        setDeleteMessage({type: 'success', text: `¡Éxito! Se ha iniciado el borrado de \"${prettyName}\".`});
+        setDeleteMessage({type: 'success', text: result.data.message || `¡Éxito! Se ha completado el borrado de \"${prettyName}\".`});
         if (collectionName === 'Implementacion Pospago') resetImplementationState();
         if (collectionName === 'Base Pospago') setMasterPdvIds(new Set());
-        setUploaderKey(prev => prev + 1);
+        setUploaderKey(prev => prev + 1); // Refresca componentes dependientes
     } catch (err) {
-        setDeleteMessage({type: 'error', text: err.message || `Ocurrió un error al invocar la función de borrado para \"${prettyName}\".`});
+        console.error("Error en handleDeleteCollection:", err);
+        const errorMessage = err.message || `Ocurrió un error al borrar \"${prettyName}\".`;
+        setDeleteMessage({type: 'error', text: `Error: ${errorMessage}`});
     } finally {
         setIsDeleting(prev => ({...prev, [deletingKey]: false}));
     }
   };
 
+  // El resto de la lógica del componente permanece igual...
   const fetchMasterPdvIds = async () => {
     try {
       const pospagoSnapshot = await getDocs(collection(db, 'Base Pospago'));
@@ -176,9 +180,24 @@ const UploadPage = () => {
             
             <Typography variant="body1" sx={{fontWeight: 'bold'}}>Base Maestra (Pospago)</Typography>
             <DataUploader key={`uploader-pospago-${uploaderKey}`} collectionName="Base Pospago" onUploadSuccess={fetchMasterPdvIds}/>
-            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Base Pospago')} sx={{ mt: 1 }} disabled={isDeleting.base} startIcon={<DeleteForever />}>
-              {isDeleting.base ? 'Borrando...' : 'Borrar Base Pospago'}
-            </Button>
+            
+            {/* --- BOTÓN DE BORRADO POSPAGO --- */}
+            <Tooltip title={!user ? "Debes iniciar sesión para borrar datos" : ""}>
+              <span> {/* El span es necesario para que el Tooltip funcione en un botón deshabilitado */}
+                <Button 
+                  fullWidth 
+                  variant="contained" 
+                  color="error" 
+                  size="small" 
+                  onClick={() => handleDeleteCollection('Base Pospago')} 
+                  sx={{ mt: 1 }} 
+                  disabled={isDeleting.base || !user} // Deshabilitado si no hay usuario
+                  startIcon={<DeleteForever />}
+                >
+                  {isDeleting.base ? 'Borrando...' : 'Borrar Base Pospago'}
+                </Button>
+              </span>
+            </Tooltip>
 
             <Divider sx={{my: 2}} />
 
@@ -199,13 +218,30 @@ const UploadPage = () => {
               </List>
             )}
             {implementationFile && <Button fullWidth variant="outlined" color="secondary" size="small" onClick={resetImplementationState} sx={{mt: 1}}>Limpiar Selección</Button>}
-            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Implementacion Pospago')} sx={{ mt: 1 }} disabled={isDeleting.impl} startIcon={<DeleteForever />}>
-              {isDeleting.impl ? 'Borrando...' : 'Borrar Implementaciones Anteriores'}
-            </Button>
+            
+            {/* --- BOTÓN DE BORRADO IMPLEMENTACIONES --- */}
+            <Tooltip title={!user ? "Debes iniciar sesión para borrar datos" : ""}>
+              <span>
+                <Button 
+                  fullWidth 
+                  variant="contained" 
+                  color="error" 
+                  size="small" 
+                  onClick={() => handleDeleteCollection('Implementacion Pospago')} 
+                  sx={{ mt: 1 }} 
+                  disabled={isDeleting.impl || !user} // Deshabilitado si no hay usuario
+                  startIcon={<DeleteForever />}
+                >
+                  {isDeleting.impl ? 'Borrando...' : 'Borrar Implementaciones Anteriores'}
+                </Button>
+              </span>
+            </Tooltip>
+
           </Paper>
         </Grid>
 
         <Grid item xs={12} md={9}>
+          {/* El resto de la UI no necesita cambios... */}
           <Paper elevation={3} sx={{ p: 2, width: '100%' }}>
             <Alert severity="warning" sx={{mb: 2}}>
               <AlertTitle>Estado de la Validación</AlertTitle>

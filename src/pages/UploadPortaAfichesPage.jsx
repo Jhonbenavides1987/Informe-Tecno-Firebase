@@ -80,7 +80,7 @@ const MetaManager = ({ uploaderKey }) => {
     );
 };
 
-const UploadPortaAfichesPage = () => {
+const UploadPortaAfichesPage = ({ user }) => {
     const [uploaderKey, setUploaderKey] = useState(0);
     const [isDeleting, setIsDeleting] = useState({ impl: false, meta: false });
     const [deleteMessage, setDeleteMessage] = useState({ type: '', text: '' });
@@ -125,14 +125,14 @@ const UploadPortaAfichesPage = () => {
                             {deleteMessage.text && <Alert severity={deleteMessage.type} sx={{mb: 2}}>{deleteMessage.text}</Alert>}
                             
                             <Typography variant="body1" sx={{fontWeight: 'bold'}}>Implementaciones</Typography>
-                            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Implementacion_PortaAfiches')} sx={{ mt: 1 }} disabled={isDeleting.impl} startIcon={<DeleteForever />}>
+                            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Implementacion_PortaAfiches')} sx={{ mt: 1 }} disabled={isDeleting.impl || !user} startIcon={<DeleteForever />}>
                                 {isDeleting.impl ? 'Borrando...' : 'Borrar Implementaciones'}
                             </Button>
 
                             <Divider sx={{my: 2}} />
 
                             <Typography variant="body1" sx={{fontWeight: 'bold'}}>Metas</Typography>
-                            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('MetasPortaAfiches')} sx={{ mt: 1 }} disabled={isDeleting.meta} startIcon={<DeleteForever />}>
+                            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('MetasPortaAfiches')} sx={{ mt: 1 }} disabled={isDeleting.meta || !user} startIcon={<DeleteForever />}>
                                 {isDeleting.meta ? 'Borrando...' : 'Borrar Metas'}
                             </Button>
                         </Paper>

@@ -1,14 +1,14 @@
-
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext'; // Importamos el hook de autenticación
 import {
-  AppBar, Toolbar, Typography, Button, Menu, MenuItem, Box, useTheme, useMediaQuery, IconButton, Drawer, List, ListItemButton, ListItemText, Collapse, Divider
+  AppBar, Toolbar, Typography, Button, Menu, MenuItem, Box, useTheme, useMediaQuery, IconButton, Drawer, List, ListItemButton, ListItemText, Collapse, Divider, Avatar, Tooltip
 } from '@mui/material';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import MenuIcon from '@mui/icons-material/Menu';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
+import LogoutIcon from '@mui/icons-material/Logout';
 
 const NavMenu = ({ title, items }) => {
   const [anchorEl, setAnchorEl] = useState(null);
@@ -96,6 +96,7 @@ const Navbar = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, logout } = useAuth(); // Obtenemos el usuario y la función de logout
   
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -112,19 +113,40 @@ const Navbar = () => {
       { label: 'Planeación', to: '/dashboard-planeacion' },
   ];
 
-  const drawer = (
-    <Box sx={{ textAlign: 'center', width: 250 }} role="presentation">
-      <Typography variant="h6" sx={{ my: 2 }}>
-        Menú
-      </Typography>
-      <Divider />
-      <List>
-          <ListItemButton component={NavLink} to="/carga-de-modulos" onClick={handleDrawerToggle}>
-              <ListItemText primary="Cargar Datos" primaryTypographyProps={{ fontWeight: 'bold', color: 'primary' }} />
-          </ListItemButton>
+  const drawerContent = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box sx={{ textAlign: 'center', flexGrow: 1 }}>
+          <Typography variant="h6" sx={{ my: 2 }}>
+            Menú
+          </Typography>
           <Divider />
-          <MobileSubMenu title="Dashboards" items={dashboardItems} onLinkClick={handleDrawerToggle} />
-      </List>
+          <List>
+              <ListItemButton component={NavLink} to="/carga-de-modulos" onClick={handleDrawerToggle}>
+                  <ListItemText primary="Cargar Datos" primaryTypographyProps={{ fontWeight: 'bold', color: 'primary' }} />
+              </ListItemButton>
+              <Divider />
+              <MobileSubMenu title="Dashboards" items={dashboardItems} onLinkClick={handleDrawerToggle} />
+          </List>
+      </Box>
+      {/* Sección del usuario que aparece al final */}
+      {user && (
+          <Box sx={{ p: 2, borderTop: '1px solid rgba(0, 0, 0, 0.12)' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Avatar sx={{ width: 40, height: 40, mr: 2 }}>{user.email.charAt(0).toUpperCase()}</Avatar>
+                <Tooltip title={user.email}>
+                    <Typography variant="body2" noWrap>{user.email}</Typography>
+                </Tooltip>
+            </Box>
+            <Button 
+              variant="contained" 
+              startIcon={<LogoutIcon />} 
+              fullWidth
+              onClick={() => { logout(); handleDrawerToggle(); }}
+            >
+              Cerrar Sesión
+            </Button>
+          </Box>
+      )}
     </Box>
   );
 
@@ -165,6 +187,13 @@ const Navbar = () => {
                 Cargar Datos
               </Button>
               <NavMenu title="Dashboards" items={dashboardItems} />
+               {/* Información del usuario en la barra superior para escritorio */}
+               {user && (
+                 <Box sx={{ display: 'flex', alignItems: 'center', ml: 3, pl: 3, borderLeft: '1px solid white' }}>
+                    <Avatar sx={{ width: 32, height: 32, mr: 1.5 }}>{user.email.charAt(0).toUpperCase()}</Avatar>
+                    <Button color="inherit" onClick={logout}>Cerrar Sesión</Button>
+                 </Box>
+               )}
             </Box>
           )}
         </Toolbar>
@@ -183,7 +212,7 @@ const Navbar = () => {
             '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 250 },
           }}
         >
-          {drawer}
+          {drawerContent}
         </Drawer>
       </nav>
     </>

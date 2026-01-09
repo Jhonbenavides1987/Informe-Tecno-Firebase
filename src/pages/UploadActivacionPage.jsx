@@ -15,7 +15,7 @@ import DataUploader from '../components/DataUploader';
 
 const PREVIEW_ROWS = 100;
 
-const UploadActivacionPage = () => {
+const UploadActivacionPage = ({ user }) => {
   // State
   const [uploaderKey, setUploaderKey] = useState(0);
   const [isDeleting, setIsDeleting] = useState({base: false, impl: false});
@@ -199,9 +199,13 @@ const UploadActivacionPage = () => {
             
             <Typography variant="body1" sx={{fontWeight: 'bold'}}>Base Maestra (Compartida)</Typography>
             <DataUploader key={`uploader-activacion-${uploaderKey}`} collectionName="Base Prepago" onUploadSuccess={fetchMasterPdvIds}/>
-            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Base Prepago')} sx={{ mt: 1 }} disabled={isDeleting.base} startIcon={<DeleteForever />}>
-              {isDeleting.base ? 'Borrando...' : 'Borrar Base Maestra'}
-            </Button>
+            <Tooltip title={!user ? "Debes iniciar sesión para borrar datos" : ""}>
+              <span>
+                <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Base Prepago')} sx={{ mt: 1 }} disabled={isDeleting.base || !user} startIcon={<DeleteForever />}>
+                  {isDeleting.base ? 'Borrando...' : 'Borrar Base Maestra'}
+                </Button>
+              </span>
+            </Tooltip>
 
             <Divider sx={{my: 2}} />
 
@@ -222,9 +226,13 @@ const UploadActivacionPage = () => {
               </List>
             )}
             {implementationFile && <Button fullWidth variant="outlined" color="secondary" size="small" onClick={resetImplementationState} sx={{mt: 1}}>Limpiar Selección</Button>}
-            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Implementacion Activacion')} sx={{ mt: 1 }} disabled={isDeleting.impl} startIcon={<DeleteForever />}>
-              {isDeleting.impl ? 'Borrando...' : 'Borrar Implementaciones Anteriores'}
-            </Button>
+            <Tooltip title={!user ? "Debes iniciar sesión para borrar datos" : ""}>
+              <span>
+                <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Implementacion Activacion')} sx={{ mt: 1 }} disabled={isDeleting.impl || !user} startIcon={<DeleteForever />}>
+                  {isDeleting.impl ? 'Borrando...' : 'Borrar Implementaciones Anteriores'}
+                </Button>
+              </span>
+            </Tooltip>
           </Paper>
         </Grid>
 

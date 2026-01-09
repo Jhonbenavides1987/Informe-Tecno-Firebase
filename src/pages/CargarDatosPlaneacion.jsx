@@ -15,7 +15,7 @@ import {
 
 const PREVIEW_ROWS = 100; // Número de filas a previsualizar
 
-const CargarDatosPlaneacion = () => {
+const CargarDatosPlaneacion = ({ user }) => {
   // --- State --- 
   const [file, setFile] = useState(null);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
@@ -176,9 +176,13 @@ const CargarDatosPlaneacion = () => {
               </List>
             )}
             {file && <Button fullWidth variant="outlined" color="secondary" size="small" onClick={resetState} sx={{mt: 1}}>Limpiar Selección</Button>}
-            <Button fullWidth variant="contained" color="error" size="small" onClick={handleDeleteCollections} sx={{ mt: 1 }} disabled={isDeleting} startIcon={<DeleteForever />}>
-              {isDeleting ? 'Borrando...' : 'Borrar Cargas Anteriores'}
-            </Button>
+            <Tooltip title={!user ? "Debes iniciar sesión para borrar datos" : ""}>
+              <span>
+                <Button fullWidth variant="contained" color="error" size="small" onClick={handleDeleteCollections} sx={{ mt: 1 }} disabled={isDeleting || !user} startIcon={<DeleteForever />}>
+                  {isDeleting ? 'Borrando...' : 'Borrar Cargas Anteriores'}
+                </Button>
+              </span>
+            </Tooltip>
           </Paper>
         </Grid>
 
@@ -225,8 +229,8 @@ const CargarDatosPlaneacion = () => {
                   ))}
                 </TableBody>
               </Table>
-            </TableContainer>
              {file && filteredRows.length === 0 && <Typography sx={{textAlign: 'center', p: 4}}>No hay datos para mostrar con los filtros actuales.</Typography>}
+             </TableContainer>
           </Paper>
         </Grid>
       </Grid>

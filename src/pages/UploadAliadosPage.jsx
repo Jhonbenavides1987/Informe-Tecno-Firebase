@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
-  Box, Button, Container, Typography, Alert, Paper, Grid, List, ListItem, ListItemIcon,
-  ListItemText, Select, MenuItem, FormControl, InputLabel, TextField, Table, TableBody, TableCell,
+  Box, Button, Container, Typography, Alert, Paper, Grid, List, ListItem, ListItemIcon, 
+  ListItemText, Select, MenuItem, FormControl, InputLabel, TextField, Table, TableBody, TableCell, 
   TableContainer, TableHead, TableRow, Tooltip, IconButton, LinearProgress, Divider, AlertTitle
 } from '@mui/material';
 import { getFirestore, collection, getDocs, writeBatch, doc } from "firebase/firestore";
@@ -15,12 +15,13 @@ import DataUploader from '../components/DataUploader';
 
 const PREVIEW_ROWS = 100;
 
-const UploadAliadosPage = () => {
-  // --- State ---
+const UploadAliadosPage = ({ user }) => {
+  // State
   const [uploaderKey, setUploaderKey] = useState(0);
   const [isDeleting, setIsDeleting] = useState({base: false, impl: false});
   const [deleteMessage, setDeleteMessage] = useState({type: '', text: ''});
   const [implementationFile, setImplementationFile] = useState(null);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [fileHeaders, setFileHeaders] = useState([]);
   const [fileRows, setFileRows] = useState([]);
   const [selectedPdvIdColumn, setSelectedPdvIdColumn] = useState('');
@@ -34,14 +35,12 @@ const UploadAliadosPage = () => {
 
   const db = getFirestore();
   const functions = getFunctions();
-
-  // --- Core Functions ---
-
+  
   const handleDeleteCollection = async (collectionName) => {
     const prettyName = collectionName.replace(/_/g, ' ');
     if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de la colección \"${prettyName}\"? Esta acción no se puede deshacer y puede tardar varios minutos.`)) return;
 
-    const deletingKey = collectionName === 'Base Prepago' ? 'base' : 'impl';
+    const deletingKey = collectionName === 'Base Aliados' ? 'base' : 'impl';
     setIsDeleting(prev => ({...prev, [deletingKey]: true}));
     setDeleteMessage({type: 'info', text: `Iniciando borrado de \"${prettyName}\"...`});
 
@@ -52,7 +51,7 @@ const UploadAliadosPage = () => {
         setDeleteMessage({type: 'success', text: `¡Éxito! Se ha iniciado el borrado de \"${prettyName}\".`});
         
         if (collectionName === 'Implementacion Aliados') resetImplementationState();
-        if (collectionName === 'Base Prepago') setMasterPdvIds(new Set());
+        if (collectionName === 'Base Aliados') setMasterPdvIds(new Set());
         
         setUploaderKey(prev => prev + 1); // Force re-render of children
     } catch (err) {
@@ -62,21 +61,21 @@ const UploadAliadosPage = () => {
     }
   };
 
-  const fetchMasterPdvIds = useCallback(async () => {
+  const fetchMasterPdvIds = async () => {
     try {
-      const prepagoSnapshot = await getDocs(collection(db, 'Base Prepago'));
-      const ids = new Set(prepagoSnapshot.docs.map(d => String(d.data().IDPDV).trim()));
+      const aliadosSnapshot = await getDocs(collection(db, 'Base Aliados'));
+      const ids = new Set(aliadosSnapshot.docs.map(d => String(d.data().CODIGO_PDV).trim()));
       setMasterPdvIds(ids);
     } catch (error) {
-      setUploadError("Error al cargar la base maestra de PDV (Compartida).");
+      setUploadError("Error al cargar la base maestra de PDV de Aliados.");
     }
-  }, [db]);
+  };
 
-  useEffect(() => { fetchMasterPdvIds(); }, [uploaderKey, fetchMasterPdvIds]);
+  useEffect(() => { fetchMasterPdvIds(); }, [uploaderKey]);
 
   const resetImplementationState = () => {
-    setImplementationFile(null); setFileHeaders([]); setFileRows([]);
-    setSelectedPdvIdColumn(''); setUploadError(null); setUploadSuccess(null);
+    setImplementationFile(null); setIsProcessingFile(false); setFileHeaders([]); setFileRows([]);
+    setSelectedPdvIdColumn(''); setUploadError(null); setUploadSuccess(null); 
     setValidationStatus({}); setFilters([{ column: '', value: '' }]);
   };
 
@@ -92,6 +91,7 @@ const UploadAliadosPage = () => {
     resetImplementationState();
     const file = acceptedFiles[0];
     setImplementationFile(file);
+    setIsProcessingFile(true);
     try {
       const rows = await parseFile(file);
       if (!rows || rows.length < 1) throw new Error("El archivo está vacío o es inválido.");
@@ -100,7 +100,7 @@ const UploadAliadosPage = () => {
       setFileRows(rows.slice(1)); // Store data rows only
     } catch (err) {
       setUploadError(err.message || 'Error al procesar el archivo.');
-    }
+    } finally { setIsProcessingFile(false); }
   }, []);
 
   useEffect(() => {
@@ -125,7 +125,7 @@ const UploadAliadosPage = () => {
           return cellValue.includes(filter.value.toLowerCase());
       });
   }), [fileRows, filters, fileHeaders]);
-
+  
   const validFilteredRowsCount = useMemo(() => filteredRows.filter((row, index) => validationStatus[fileRows.indexOf(row)]).length, [filteredRows, validationStatus, fileRows]);
 
   const uniqueValidRowsToUpload = useMemo(() => {
@@ -196,12 +196,17 @@ const UploadAliadosPage = () => {
           <Paper elevation={3} sx={{ p: 2, position: 'sticky', top: 20 }}>
             <Typography variant="h6" gutterBottom>1. Cargar Archivos (Aliados)</Typography>
             {deleteMessage.text && <Alert severity={deleteMessage.type} sx={{mb: 2}}>{deleteMessage.text}</Alert>}
-
-            <Typography variant="body1" sx={{fontWeight: 'bold'}}>Base Maestra (Compartida)</Typography>
-            <DataUploader key={`uploader-aliados-${uploaderKey}`} collectionName="Base Prepago" onUploadSuccess={fetchMasterPdvIds}/>
-            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Base Prepago')} sx={{ mt: 1 }} disabled={isDeleting.base} startIcon={<DeleteForever />}>
-              {isDeleting.base ? 'Borrando...' : 'Borrar Base Maestra'}
-            </Button>
+            
+            <Typography variant="body1" sx={{fontWeight: 'bold'}}>Base Maestra (Aliados)</Typography>
+            <DataUploader key={`uploader-aliados-${uploaderKey}`} collectionName="Base Aliados" primaryKey="CODIGO_PDV" onUploadSuccess={fetchMasterPdvIds}/>
+            
+            <Tooltip title={!user ? "Debes iniciar sesión para borrar datos" : ""}>
+              <span>
+                <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Base Aliados')} sx={{ mt: 1 }} disabled={isDeleting.base || !user} startIcon={<DeleteForever />}>
+                  {isDeleting.base ? 'Borrando...' : 'Borrar Base Aliados'}
+                </Button>
+              </span>
+            </Tooltip>
 
             <Divider sx={{my: 2}} />
 
@@ -222,9 +227,15 @@ const UploadAliadosPage = () => {
               </List>
             )}
             {implementationFile && <Button fullWidth variant="outlined" color="secondary" size="small" onClick={resetImplementationState} sx={{mt: 1}}>Limpiar Selección</Button>}
-            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Implementacion Aliados')} sx={{ mt: 1 }} disabled={isDeleting.impl} startIcon={<DeleteForever />}>
-              {isDeleting.impl ? 'Borrando...' : 'Borrar Implementaciones Anteriores'}
-            </Button>
+            
+            <Tooltip title={!user ? "Debes iniciar sesión para borrar datos" : ""}>
+              <span>
+                <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Implementacion Aliados')} sx={{ mt: 1 }} disabled={isDeleting.impl || !user} startIcon={<DeleteForever />}>
+                  {isDeleting.impl ? 'Borrando...' : 'Borrar Implementaciones Anteriores'}
+                </Button>
+              </span>
+            </Tooltip>
+
           </Paper>
         </Grid>
 
@@ -232,8 +243,8 @@ const UploadAliadosPage = () => {
           <Paper elevation={3} sx={{ p: 2, width: '100%' }}>
              <Alert severity="warning" sx={{mb: 2}}>
               <AlertTitle>Estado de la Validación</AlertTitle>
-              Se han cargado <strong>{masterPdvIds.size}</strong> IDs únicos desde la <strong>Base Maestra</strong> en memoria para la validación.
-              Si este número es 0, por favor, asegúrate de haber subido el archivo correcto de 'Base Maestra'.
+              Se han cargado <strong>{masterPdvIds.size}</strong> IDs únicos desde la <strong>Base Aliados</strong> en memoria para la validación.
+              Si este número es 0, por favor, asegúrate de haber subido el archivo correcto de 'Base Aliados'.
             </Alert>
 
             <Typography variant="h6">2. Configurar y Previsualizar (Aliados)</Typography>
@@ -259,17 +270,17 @@ const UploadAliadosPage = () => {
               ))}
               <Button startIcon={<AddCircleOutline />} onClick={addFilter} disabled={!implementationFile}>Añadir Filtro</Button>
             </Box>
-
+            
             <Alert severity="info" sx={{my: 1}}>
               Mostrando {Math.min(filteredRows.length, PREVIEW_ROWS)} de {filteredRows.length} filas que coinciden con los filtros. <br/>
               De estas, <strong>{validFilteredRowsCount} filas son válidas</strong> (tienen ✅). <br/>
               Se cargarán <strong>{uniqueValidRowsCount} registros únicos</strong> (basado en la columna de ID de PDV).
             </Alert>
-
+            
             {uploadError && <Alert severity="error" sx={{ my: 1, whiteSpace: 'pre-wrap' }}>{uploadError}</Alert>}
             {uploadSuccess && <Alert severity="success" sx={{ my: 1 }}>{uploadSuccess}</Alert>}
             {uploading && <LinearProgress variant="determinate" value={uploadProgress} sx={{my: 1}}/>}
-
+            
             <Button variant="contained" size="large" fullWidth onClick={handleUpload} disabled={!selectedPdvIdColumn || uploading || uniqueValidRowsCount === 0}>
               {uploading ? `Cargando... ${Math.round(uploadProgress)}%` : `Iniciar Carga de ${uniqueValidRowsCount} Registros Únicos`}
             </Button>
@@ -278,7 +289,7 @@ const UploadAliadosPage = () => {
               <Table stickyHeader size="small">
                 <TableHead><TableRow><TableCell sx={{position: 'sticky', left: 0, zIndex: 10, background: 'white'}}>Diagnóstico</TableCell>{fileHeaders.map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead>
                 <TableBody>
-                  {filteredRows.slice(0, PREVIEW_ROWS).map((row) => {
+                  {filteredRows.slice(0, PREVIEW_ROWS).map((row, rowIndex) => {
                     const originalIndex = fileRows.indexOf(row);
                     const isValid = validationStatus[originalIndex];
                     const rowStyle = !selectedPdvIdColumn ? {} : (isValid ? { backgroundColor: 'rgba(200, 255, 200, 0.2)' } : { backgroundColor: 'rgba(255, 200, 200, 0.3)' });

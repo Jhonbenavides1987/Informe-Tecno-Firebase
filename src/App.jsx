@@ -1,4 +1,7 @@
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext'; // Importo useAuth
+
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardPage from './pages/DashboardPage';
@@ -23,76 +26,49 @@ import { Box } from '@mui/material';
 function App() {
   return (
     <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
+  );
+}
+
+const AppContent = () => {
+  // Usamos el hook useAuth para obtener el usuario del contexto
+  const { user } = useAuth();
+
+  return (
+    <Box sx={{ display: 'flex' }}>
       <Navbar />
-      <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px' }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px', width: '100%' }}>
         <Routes>
           {/* Ruta de Inicio */}
           <Route path="/" element={<DashboardPage />} />
 
-          <Route 
-            path="/carga-de-modulos"
-            element={<ProtectedRoute><CargaModulosPage /></ProtectedRoute>}
-          />
-
-          {/* Rutas Pospago */}
+          {/* Pasamos el prop 'user' a todas las páginas de carga */}
+          <Route path="/carga-de-modulos" element={<ProtectedRoute><CargaModulosPage /></ProtectedRoute>} />
+          <Route path="/upload-pospago" element={<ProtectedRoute><UploadPage user={user} /></ProtectedRoute>} />
+          <Route path="/upload-prepago" element={<ProtectedRoute><UploadPrepagoPage user={user} /></ProtectedRoute>} />
+          <Route path="/upload-durable" element={<ProtectedRoute><UploadDurablePage user={user} /></ProtectedRoute>} />
+          <Route path="/upload-activacion" element={<ProtectedRoute><UploadActivacionPage user={user} /></ProtectedRoute>} />
+          <Route path="/upload-aliados" element={<ProtectedRoute><UploadAliadosPage user={user} /></ProtectedRoute>} />
+          <Route path="/upload-calendarios" element={<ProtectedRoute><UploadCalendariosPage user={user} /></ProtectedRoute>} />
+          <Route path="/upload-porta-afiches" element={<ProtectedRoute><UploadPortaAfichesPage user={user} /></ProtectedRoute>} />
+          <Route path="/upload-planeacion" element={<ProtectedRoute><CargarDatosPlaneacion user={user} /></ProtectedRoute>} />
+          
+          {/* Rutas Públicas */}
           <Route path="/dashboard-pospago" element={<DashboardPage />} />
-          <Route 
-            path="/upload-pospago" 
-            element={<ProtectedRoute><UploadPage /></ProtectedRoute>}
-          />
-
-          {/* Rutas Prepago */}
           <Route path="/dashboard-prepago" element={<DashboardPrepagoPage />} />
-          <Route 
-            path="/upload-prepago" 
-            element={<ProtectedRoute><UploadPrepagoPage /></ProtectedRoute>}
-          />
-
-          {/* Rutas Durable */}
           <Route path="/dashboard-durable" element={<DashboardDurablePage />} />
-          <Route 
-            path="/upload-durable" 
-            element={<ProtectedRoute><UploadDurablePage /></ProtectedRoute>}
-          />
-
-          {/* Rutas Activación */}
           <Route path="/dashboard-activacion" element={<DashboardActivacionPage />} />
-          <Route 
-            path="/upload-activacion" 
-            element={<ProtectedRoute><UploadActivacionPage /></ProtectedRoute>}
-          />
-
-          {/* Rutas Aliados */}
           <Route path="/dashboard-aliados" element={<DashboardAliadosPage />} />
-          <Route 
-            path="/upload-aliados" 
-            element={<ProtectedRoute><UploadAliadosPage /></ProtectedRoute>}
-          />
-
-          {/* Rutas Calendarios */}
           <Route path="/dashboard-calendarios" element={<DashboardCalendariosPage />} />
-          <Route 
-            path="/upload-calendarios" 
-            element={<ProtectedRoute><UploadCalendariosPage /></ProtectedRoute>}
-          />
-
-           {/* Rutas Porta Afiches */}
           <Route path="/dashboard-porta-afiches" element={<DashboardPortaAfichesPage />} />
-          <Route 
-            path="/upload-porta-afiches" 
-            element={<ProtectedRoute><UploadPortaAfichesPage /></ProtectedRoute>}
-          />
-
-          {/* Rutas Planeación */}
           <Route path="/dashboard-planeacion" element={<DashboardPlaneacionPage />} />
-          <Route 
-            path="/upload-planeacion" 
-            element={<ProtectedRoute><CargarDatosPlaneacion /></ProtectedRoute>}
-          />
         </Routes>
       </Box>
-    </Router>
+    </Box>
   );
-}
+};
 
 export default App;

@@ -1,9 +1,9 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react'; // Importar useEffect
+import { auth } from '../firebase';
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 
-// 1. Crear el Contexto
 export const AuthContext = createContext(null);
 
-// Hook personalizado para usar el contexto fácilmente
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -12,32 +12,46 @@ export const useAuth = () => {
   return context;
 };
 
-// 2. Crear el Proveedor del Contexto
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Esta es la contraseña maestra. 
-  // La guardamos en una variable de entorno en un caso real, pero aquí está bien para empezar.
-  const MASTER_PASSWORD = 'admin'; // ¡Podemos cambiar esto por lo que quieras!
+  // ¡CORREGIDO! Usamos useEffect, no useState.
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+    });
+    // Cleanup
+    return () => unsubscribe();
+  }, []); // El array vacío asegura que esto solo se ejecute una vez.
 
-  const login = (password) => {
-    if (password === MASTER_PASSWORD) {
-      setIsAuthenticated(true);
-      return true; // Éxito
+  const login = async (email, password) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return { success: true };
+    } catch (error) {
+      console.error("Error de autenticación:", error.code);
+      return { success: false, error: "Credenciales incorrectas. Verifica el email y la contraseña." };
     }
-    return false; // Fallo
   };
 
   const logout = () => {
-    // Podríamos añadir un botón de "cerrar sesión" en el futuro si es necesario
-    setIsAuthenticated(false);
+    signOut(auth);
   };
 
   const value = {
-    isAuthenticated,
+    isAuthenticated: !!user,
+    user,
     login,
     logout,
+    loading,
   };
+
+  // Mientras el estado inicial de auth está cargando, no mostramos nada para evitar parpadeos.
+  if (loading) {
+    return null; 
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
