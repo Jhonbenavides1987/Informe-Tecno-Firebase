@@ -1,11 +1,11 @@
-
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   Box, Button, Container, Typography, Alert, Paper, Grid, List, ListItem, ListItemIcon, 
   ListItemText, Select, MenuItem, FormControl, InputLabel, TextField, Table, TableBody, TableCell, 
   TableContainer, TableHead, TableRow, Tooltip, IconButton, LinearProgress, AlertTitle
 } from '@mui/material';
-import { getFirestore, collection, getDocs, writeBatch, doc } from "firebase/firestore";
+import { getFirestore, collection, writeBatch, doc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { useDropzone } from 'react-dropzone';
 import readXlsxFile from 'read-excel-file';
 import Papa from 'papaparse';
@@ -32,6 +32,7 @@ const CargarDatosPlaneacion = () => {
   const [uploadSuccess, setUploadSuccess] = useState(null);
 
   const db = getFirestore();
+  const functions = getFunctions();
   const collectionName = "UploadPlaneacion";
   const secondCollectionName = "Planeacion"; // Colección adicional a borrar
 
@@ -45,39 +46,23 @@ const CargarDatosPlaneacion = () => {
 
   const handleDeleteCollections = async () => {
     const collectionsToDelete = [collectionName, secondCollectionName];
-    if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de "${collectionsToDelete.join(' y ')}"? Esta acción es irreversible.`)) return;
+    if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de "${collectionsToDelete.join(' y ')}"? Esta acción es irreversible y puede tardar varios minutos.`)) return;
 
     setIsDeleting(true);
     setDeleteMessage({ type: '', text: '' });
 
     try {
-      let totalDeleted = 0;
-      for (const collName of collectionsToDelete) {
-        const querySnapshot = await getDocs(collection(db, collName));
-        const totalDocs = querySnapshot.size;
-        if (totalDocs > 0) {
-          const batchSize = 499; // Firestore limit is 500
-          const docs = querySnapshot.docs;
-          for (let i = 0; i < docs.length; i += batchSize) {
-            const batch = writeBatch(db);
-            const chunk = docs.slice(i, i + batchSize);
-            chunk.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-          }
-          totalDeleted += totalDocs;
+        const deleteCollection = httpsCallable(functions, 'deleteAllDocumentsInCollection');
+        for (const collName of collectionsToDelete) {
+            await deleteCollection({ collectionPath: collName });
         }
-      }
 
-      if (totalDeleted > 0) {
-        setDeleteMessage({ type: 'success', text: `¡Éxito! Se borraron ${totalDeleted} registros de "${collectionsToDelete.join(' y ')}".` });
-      } else {
-        setDeleteMessage({ type: 'info', text: `Las colecciones "${collectionsToDelete.join(' y ')}" ya estaban vacías.` });
-      }
-      resetState();
+        setDeleteMessage({ type: 'success', text: `¡Éxito! Se ha iniciado el borrado de las colecciones "${collectionsToDelete.join(' y ')}".` });
+        resetState();
     } catch (err) {
-      setDeleteMessage({ type: 'error', text: err.message || `Ocurrió un error al borrar las colecciones.` });
+        setDeleteMessage({ type: 'error', text: err.message || `Ocurrió un error al invocar la función de borrado.` });
     } finally {
-      setIsDeleting(false);
+        setIsDeleting(false);
     }
   };
 

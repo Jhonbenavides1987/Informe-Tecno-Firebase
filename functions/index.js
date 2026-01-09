@@ -1,5 +1,6 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const firebase_tools = require('firebase-tools');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -171,3 +172,33 @@ exports.enrichPlaneacionData = functions.firestore
         return null;
       }
     });
+
+// --- FUNCIÓN PARA BORRADO MASIVO DE COLECCIONES ---
+exports.deleteAllDocumentsInCollection = functions.https.onCall(async (data, context) => {
+    const collectionPath = data.collectionPath;
+
+    // Podrías añadir autenticación para asegurarte que solo usuarios autorizados puedan llamar a esta función
+    // if (!context.auth) {
+    //   throw new functions.https.HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+    // }
+
+    if (!collectionPath || typeof collectionPath !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'La función debe ser llamada con el argumento "collectionPath".');
+    }
+
+    functions.logger.log(`Solicitud de borrado para la colección: ${collectionPath}`);
+
+    try {
+        await firebase_tools.firestore.delete(collectionPath, {
+            project: process.env.GCLOUD_PROJECT,
+            recursive: true,
+            yes: true,
+        });
+
+        functions.logger.log(`Éxito al borrar la colección: ${collectionPath}`);
+        return { success: true, message: `Se borraron todos los documentos en ${collectionPath}` };
+    } catch (error) {
+        functions.logger.error(`Error al borrar la colección ${collectionPath}:`, error);
+        throw new functions.https.HttpsError('internal', `No se pudo borrar la colección ${collectionPath}.`);
+    }
+});

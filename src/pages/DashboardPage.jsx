@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Typography, Card, CardContent, Grid, Paper, Alert, TextField, ToggleButton, ToggleButtonGroup, 
-  CircularProgress, FormControl, InputLabel, Select, MenuItem, Button, Table, TableBody, TableCell, 
-  TableContainer, TableHead, TableRow, Chip, Accordion, AccordionSummary, AccordionDetails
+  CircularProgress, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
+  Chip, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { collection, onSnapshot } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { firestore } from '../firebase';
+import FilterControls from '../components/FilterControls';
 
 // --- Helper Functions ---
 const getStatusStyle = (value) => {
-  if (value >= 94) return { backgroundColor: '#4caf50', color: 'white' }; // Verde
-  if (value >= 80) return { backgroundColor: '#ffc107', color: 'black' }; // Amarillo
-  return { backgroundColor: '#f44336', color: 'white' }; // Rojo
+  if (value >= 94) return { backgroundColor: '#4caf50', color: 'white' };
+  if (value >= 80) return { backgroundColor: '#ffc107', color: 'black' };
+  return { backgroundColor: '#f44336', color: 'white' };
 };
 
 const aggregateData = (data, key) => {
@@ -37,15 +38,14 @@ const aggregateData = (data, key) => {
   })).sort((a, b) => a.name.localeCompare(b.name));
 };
 
-// --- ESTILOS DE ENCABEZADO Y TABLA (ACTUALIZADO) --- 
 const tableHeaderStyle = {
-  backgroundColor: '#e3f2fd', // Un azul pálido y sutil
-  color: '#0d47a1',          // Texto azul oscuro para un excelente contraste
+  backgroundColor: '#e3f2fd',
+  color: '#0d47a1',
   fontWeight: 'bold',
-  textTransform: 'uppercase',  // Texto en mayúsculas
+  textTransform: 'uppercase',
 };
 
-// --- Summary Table Component ---
+// --- Summary Table ---
 const SummaryTable = ({ title, data }) => (
   <TableContainer component={Paper} sx={{ mb: 4 }} elevation={3}>
     <Typography variant="h6" sx={{ p: 2, fontWeight: 'bold' }}>{title.toUpperCase()}</Typography>
@@ -60,10 +60,7 @@ const SummaryTable = ({ title, data }) => (
       </TableHead>
       <TableBody>
         {data.map((row) => (
-          <TableRow 
-            key={row.name}
-            sx={{ '&:hover': { backgroundColor: 'action.hover' } }} // Efecto Hover
-          >
+          <TableRow key={row.name} sx={{ '&:hover': { backgroundColor: 'action.hover' } }}>
             <TableCell component="th" scope="row">{row.name}</TableCell>
             <TableCell align="center">{row.total}</TableCell>
             <TableCell align="center">{row.implementados}</TableCell>
@@ -77,13 +74,12 @@ const SummaryTable = ({ title, data }) => (
   </TableContainer>
 );
 
-// --- Main Dashboard Page Component ---
+// --- Main Dashboard Page ---
 const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [allPdv, setAllPdv] = useState([]);
   const [error, setError] = useState(null);
-  
-  const [filters, setFilters] = useState({ sucursal: '', ruta: '', circuito: '' });
+  const [filters, setFilters] = useState({ SUCURSAL: [], RUTA: [], CIRCUITO: [] });
   const [view, setView] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -103,28 +99,16 @@ const DashboardPage = () => {
   }, []);
 
   const handleFilterChange = (name, value) => {
-    setFilters(prev => {
-      const newFilters = { ...prev, [name]: value };
-      if (name === 'sucursal') { newFilters.ruta = ''; newFilters.circuito = ''; }
-      if (name === 'ruta') { newFilters.circuito = ''; }
-      return newFilters;
-    });
+    setFilters(prev => ({ ...prev, [name]: value }));
   };
 
   const filteredPdv = useMemo(() => {
     return allPdv.filter(pdv => 
-      (!filters.sucursal || pdv.SUCURSAL === filters.sucursal) &&
-      (!filters.ruta || pdv.RUTA === filters.ruta) &&
-      (!filters.circuito || pdv.CIRCUITO === filters.circuito)
+      (filters.SUCURSAL.length === 0 || filters.SUCURSAL.includes(pdv.SUCURSAL)) &&
+      (filters.RUTA.length === 0 || filters.RUTA.includes(pdv.RUTA)) &&
+      (filters.CIRCUITO.length === 0 || filters.CIRCUITO.includes(pdv.CIRCUITO))
     );
   }, [allPdv, filters]);
-
-  const filterOptions = useMemo(() => {
-    const sucursales = [...new Set(allPdv.map(p => p.SUCURSAL).filter(Boolean))].sort((a,b) => a.localeCompare(b));
-    const rutas = [...new Set(filteredPdv.map(p => p.RUTA).filter(Boolean))].sort((a,b) => a.localeCompare(b));
-    const circuitos = [...new Set(filteredPdv.map(p => p.CIRCUITO).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b)));
-    return { sucursales, rutas, circuitos };
-  }, [allPdv, filteredPdv]);
 
   const summaryData = useMemo(() => ({
     sucursal: aggregateData(filteredPdv, 'SUCURSAL'),
@@ -158,7 +142,7 @@ const DashboardPage = () => {
   const circuitColorMap = useMemo(() => {
     const uniqueCircuits = [...new Set(finalDetailedData.map(pdv => pdv.CIRCUITO || 'Sin Asignar'))];
     const colorMap = {};
-    const colors = ['#ffffff', '#f5f5f5']; // Zebra stripes
+    const colors = ['#ffffff', '#f5f5f5'];
     uniqueCircuits.forEach((circuit, index) => {
       colorMap[circuit] = colors[index % 2];
     });
@@ -177,9 +161,15 @@ const DashboardPage = () => {
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Detalle Puntos de Venta");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Detalle Pdv Filtrado");
     XLSX.writeFile(workbook, "DetallePdvFiltrado.xlsx");
   };
+
+  const getFilterData = (filterName) => {
+      if (filterName === 'RUTA') return allPdv.filter(pdv => filters.SUCURSAL.length === 0 || filters.SUCURSAL.includes(pdv.SUCURSAL));
+      if (filterName === 'CIRCUITO') return allPdv.filter(pdv => (filters.SUCURSAL.length === 0 || filters.SUCURSAL.includes(pdv.SUCURSAL)) && (filters.RUTA.length === 0 || filters.RUTA.includes(pdv.RUTA)));
+      return allPdv;
+  }
 
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>;
@@ -191,31 +181,36 @@ const DashboardPage = () => {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Grid container spacing={2} justifyContent="center" sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Total Puntos (filtrados)</Typography><Typography variant="h4">{mainMetrics.total.toLocaleString()}</Typography></CardContent></Card></Grid>
-        <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Implementados</Typography><Typography variant="h4" color="success.main">{mainMetrics.implementados.toLocaleString()}</Typography></CardContent></Card></Grid>
-        <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Porcentaje</Typography><Typography variant="h4" color="primary.main">{`${mainMetrics.percentage.toFixed(2)}%`}</Typography></CardContent></Card></Grid>
+          <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Total Puntos (filtrados)</Typography><Typography variant="h4">{mainMetrics.total.toLocaleString()}</Typography></CardContent></Card></Grid>
+          <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Implementados</Typography><Typography variant="h4" color="success.main">{mainMetrics.implementados.toLocaleString()}</Typography></CardContent></Card></Grid>
+          <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Porcentaje</Typography><Typography variant="h4" color="primary.main">{`${mainMetrics.percentage.toFixed(2)}%`}</Typography></CardContent></Card></Grid>
       </Grid>
 
       <Accordion sx={{ mb: 4, boxShadow: '0 2px 4px -1px rgba(0,0,0,0.2)' }}>
-          <AccordionSummary
-              expandIcon={<ExpandMoreIcon />}
-              aria-controls="filters-panel-content"
-              id="filters-panel-header"
-          >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="filters-panel-content" id="filters-panel-header">
               <Typography variant="h6">Filtros</Typography>
           </AccordionSummary>
           <AccordionDetails>
-              <Paper elevation={0} sx={{ p: 2, width: '100%' }}>
-                  <Grid container spacing={2} alignItems="center">
-                      <Grid item xs={12} sm={6} md={3.5}><FormControl fullWidth><InputLabel>Sucursal</InputLabel><Select name="sucursal" value={filters.sucursal} label="Sucursal" onChange={e => handleFilterChange('sucursal', e.target.value)}>{filterOptions.sucursales.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}</Select></FormControl></Grid>
-                      <Grid item xs={12} sm={6} md={3.5}><FormControl fullWidth><InputLabel>Ruta</InputLabel><Select name="ruta" value={filters.ruta} label="Ruta" onChange={e => handleFilterChange('ruta', e.target.value)}>{filterOptions.rutas.map(r => <MenuItem key={r} value={r}>{r}</MenuItem>)}</Select></FormControl></Grid>
-                      <Grid item xs={12} sm={6} md={3.5}><FormControl fullWidth><InputLabel>Circuito</InputLabel><Select name="circuito" value={filters.circuito} label="Circuito" onChange={e => handleFilterChange('circuito', e.target.value)}>{filterOptions.circuitos.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}</Select></FormControl></Grid>
-                      <Grid item xs={12} sm={6} md={1.5}><Button fullWidth variant="outlined" onClick={() => setFilters({ sucursal: '', ruta: '', circuito: '' })}>Limpiar</Button></Grid>
+              <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                      <FilterControls
+                          headers={['SUCURSAL', 'RUTA', 'CIRCUITO']}
+                          filters={filters}
+                          onFilterChange={handleFilterChange}
+                          dataForOptions={{
+                              SUCURSAL: allPdv,
+                              RUTA: getFilterData('RUTA'),
+                              CIRCUITO: getFilterData('CIRCUITO'),
+                          }}
+                      />
                   </Grid>
-              </Paper>
+                  <Grid item xs={12}>
+                      <Button fullWidth variant="outlined" onClick={() => setFilters({ SUCURSAL: [], RUTA: [], CIRCUITO: [] })}>Limpiar Filtros</Button>
+                  </Grid>
+              </Grid>
           </AccordionDetails>
       </Accordion>
-      
+
       <SummaryTable title="Sucursal" data={summaryData.sucursal} />
       <SummaryTable title="Ruta" data={summaryData.ruta} />
       <SummaryTable title="Circuito" data={summaryData.circuito} />
@@ -247,31 +242,21 @@ const DashboardPage = () => {
             </TableHead>
             <TableBody>
               {finalDetailedData.map(pdv => (
-                <TableRow 
-                  key={pdv.id} 
-                  sx={{ 
-                    backgroundColor: circuitColorMap[pdv.CIRCUITO || 'Sin Asignar'],
-                    '&:hover': { backgroundColor: 'action.hover' } // Efecto Hover
-                  }}
-                >
+                <TableRow key={pdv.id} sx={{ backgroundColor: circuitColorMap[pdv.CIRCUITO || 'Sin Asignar'], '&:hover': { backgroundColor: 'action.hover' } }}>
                   <TableCell>{pdv.MESA}</TableCell>
                   <TableCell>{pdv.RUTA}</TableCell>
                   <TableCell>{pdv.CIRCUITO}</TableCell>
                   <TableCell>{pdv.IDPDV}</TableCell>
                   <TableCell>{pdv.NOMBRE_PUNTO}</TableCell>
                   <TableCell align="center">
-                    <Chip 
-                      label={pdv.implementado ? '100%' : '0%'} 
-                      sx={pdv.implementado ? getStatusStyle(100) : getStatusStyle(0)} 
-                      size="small"
-                    />
+                    <Chip label={pdv.implementado ? '100%' : '0%'} sx={pdv.implementado ? getStatusStyle(100) : getStatusStyle(0)} size="small"/>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </TableContainer>
-        {finalDetailedData.length === 0 && <Typography sx={{textAlign: 'center', p: 4}}>No hay datos para mostrar con los filtros actuales.</Typography>}
+        {finalDetailedData.length === 0 && <Typography sx={{textAlign: 'center', p: 4}}>No hay datos para mostrar.</Typography>}
       </Paper>
     </Box>
   );

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { 
+import {
     Container, Typography, Box, TextField, Button, Paper, Alert, 
-    Select, MenuItem, FormControl, InputLabel 
+    Select, MenuItem, FormControl, InputLabel, Grid, Divider
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
-import CalendariosUploader from '../components/CalendariosUploader'; // Importamos el nuevo componente
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { DeleteForever } from '@mui/icons-material';
+import CalendariosUploader from '../components/CalendariosUploader';
 
 const sucursales = [
     "TECNOMOVIL_NORORIENTE",
@@ -15,7 +17,7 @@ const sucursales = [
     "TECNORIENTE_DUITAM"
 ];
 
-const MetaManager = () => {
+const MetaManager = ({ uploaderKey }) => {
     const [sucursal, setSucursal] = useState('');
     const [meta, setMeta] = useState('');
     const [loading, setLoading] = useState(false);
@@ -79,22 +81,67 @@ const MetaManager = () => {
 };
 
 const UploadCalendariosPage = () => {
+    const [uploaderKey, setUploaderKey] = useState(0);
+    const [isDeleting, setIsDeleting] = useState({ impl: false, meta: false });
+    const [deleteMessage, setDeleteMessage] = useState({ type: '', text: '' });
+    const functions = getFunctions();
+
+    const handleDeleteCollection = async (collectionName) => {
+        const prettyName = collectionName.replace(/_/g, ' ');
+        if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de "${prettyName}"? Esta acción no se puede deshacer y puede tardar varios minutos.`)) return;
+
+        const deletingKey = collectionName === 'Implementacion_Calendarios' ? 'impl' : 'meta';
+        setIsDeleting(prev => ({...prev, [deletingKey]: true}));
+        setDeleteMessage({ type: 'info', text: `Iniciando borrado de "${prettyName}"...` });
+
+        try {
+            const deleteCollection = httpsCallable(functions, 'deleteAllDocumentsInCollection');
+            await deleteCollection({ collectionPath: collectionName });
+
+            setDeleteMessage({ type: 'success', text: `¡Éxito! Se ha iniciado el borrado de "${prettyName}".` });
+            setUploaderKey(prev => prev + 1); // Force re-render of children
+        } catch (err) {
+            setDeleteMessage({ type: 'error', text: err.message || `Ocurrió un error al invocar la función de borrado para "${prettyName}".` });
+        } finally {
+            setIsDeleting(prev => ({...prev, [deletingKey]: false}));
+        }
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
         >
-            <Container maxWidth="lg">
-                <Typography variant="h4" component="h1" sx={{ mb: 4, fontWeight: 'bold', color: 'primary.main' }}>
+            <Container maxWidth="xl">
+                <Typography variant="h4" component="h1" sx={{ mb: 4, mt: 2, fontWeight: 'bold', color: 'primary.main', textAlign: 'center' }}>
                     Carga de Datos de Calendarios
                 </Typography>
-                
-                <MetaManager />
-                
-                {/* Reemplazamos el DataUploader por el nuevo CalendariosUploader */}
-                <CalendariosUploader />
 
+                <Grid container spacing={2}>
+                    <Grid item xs={12} md={3}>
+                        <Paper elevation={3} sx={{ p: 2, position: 'sticky', top: 20 }}>
+                            <Typography variant="h6" gutterBottom>Acciones</Typography>
+                            {deleteMessage.text && <Alert severity={deleteMessage.type} sx={{mb: 2}}>{deleteMessage.text}</Alert>}
+                            
+                            <Typography variant="body1" sx={{fontWeight: 'bold'}}>Implementaciones</Typography>
+                            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Implementacion_Calendarios')} sx={{ mt: 1 }} disabled={isDeleting.impl} startIcon={<DeleteForever />}>
+                                {isDeleting.impl ? 'Borrando...' : 'Borrar Implementaciones'}
+                            </Button>
+
+                            <Divider sx={{my: 2}} />
+
+                            <Typography variant="body1" sx={{fontWeight: 'bold'}}>Metas</Typography>
+                            <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('MetasCalendarios')} sx={{ mt: 1 }} disabled={isDeleting.meta} startIcon={<DeleteForever />}>
+                                {isDeleting.meta ? 'Borrando...' : 'Borrar Metas'}
+                            </Button>
+                        </Paper>
+                    </Grid>
+                    <Grid item xs={12} md={9}>
+                        <MetaManager key={`meta-${uploaderKey}`} />
+                        <CalendariosUploader key={`uploader-${uploaderKey}`} />
+                    </Grid>
+                </Grid>
             </Container>
         </motion.div>
     );

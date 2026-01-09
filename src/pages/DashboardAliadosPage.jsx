@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Typography, Card, CardContent, Grid, Paper, Alert, TextField, ToggleButton, ToggleButtonGroup, 
-  CircularProgress, FormControl, InputLabel, Select, MenuItem, Button, Table, TableBody, TableCell, 
-  TableContainer, TableHead, TableRow, Chip, Accordion, AccordionSummary, AccordionDetails
+  CircularProgress, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
+  Chip, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { collection, onSnapshot } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { firestore } from '../firebase';
+import FilterControls from '../components/FilterControls';
 
-// --- Helper Functions (reused) ---
+// --- Helper Functions ---
 const getStatusStyle = (value) => {
   if (value >= 94) return { backgroundColor: '#4caf50', color: 'white' };
   if (value >= 80) return { backgroundColor: '#ffc107', color: 'black' };
@@ -24,7 +25,7 @@ const aggregateData = (data, key) => {
       acc[groupName] = { total: 0, registrados: 0 };
     }
     acc[groupName].total++;
-    if (item.implementado_aliados) { // <-- CAMBIO CLAVE: Usar campo de Aliados
+    if (item.implementado_aliados) { // <-- Aliados field
       acc[groupName].registrados++;
     }
     return acc;
@@ -37,7 +38,6 @@ const aggregateData = (data, key) => {
   })).sort((a, b) => a.name.localeCompare(b.name));
 };
 
-// --- Component Styles (reused) ---
 const tableHeaderStyle = {
   backgroundColor: '#e3f2fd',
   color: '#0d47a1',
@@ -45,7 +45,7 @@ const tableHeaderStyle = {
   textTransform: 'uppercase',
 };
 
-// --- Summary Table Component (reused) ---
+// --- Summary Table ---
 const SummaryTable = ({ title, data }) => (
   <TableContainer component={Paper} sx={{ mb: 4 }} elevation={3}>
     <Typography variant="h6" sx={{ p: 2, fontWeight: 'bold' }}>{title.toUpperCase()}</Typography>
@@ -60,10 +60,7 @@ const SummaryTable = ({ title, data }) => (
       </TableHead>
       <TableBody>
         {data.map((row) => (
-          <TableRow 
-            key={row.name}
-            sx={{ '&:hover': { backgroundColor: 'action.hover' } }}
-          >
+          <TableRow key={row.name} sx={{ '&:hover': { backgroundColor: 'action.hover' } }}>
             <TableCell component="th" scope="row">{row.name}</TableCell>
             <TableCell align="center">{row.total}</TableCell>
             <TableCell align="center">{row.registrados}</TableCell>
@@ -77,18 +74,16 @@ const SummaryTable = ({ title, data }) => (
   </TableContainer>
 );
 
-// --- Main Dashboard Aliados Page Component ---
+// --- Main Dashboard Page ---
 const DashboardAliadosPage = () => {
   const [loading, setLoading] = useState(true);
   const [allPdv, setAllPdv] = useState([]);
   const [error, setError] = useState(null);
-  
-  const [filters, setFilters] = useState({ sucursal: '', ruta: '', circuito: '', diasFrecuencia: [] });
+  const [filters, setFilters] = useState({ SUCURSAL: [], RUTA: [], CIRCUITO: [], DIAS_FRECUENCIA: [] });
   const [view, setView] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    // <<<--- NOTA: Sigue leyendo de 'Base Prepago' como se pidió.
     const unsubscribe = onSnapshot(collection(firestore, 'Base Prepago'), 
       (querySnapshot) => {
         const pdvList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -96,7 +91,7 @@ const DashboardAliadosPage = () => {
         setLoading(false);
       },
       (err) => {
-        setError("Ocurrió un error al cargar los datos de la base maestra.");
+        setError("Ocurrió un error al cargar los datos.");
         setLoading(false);
       }
     );
@@ -104,30 +99,17 @@ const DashboardAliadosPage = () => {
   }, []);
 
   const handleFilterChange = (name, value) => {
-    setFilters(prev => {
-      const newFilters = { ...prev, [name]: value };
-      if (name === 'sucursal') { newFilters.ruta = ''; newFilters.circuito = ''; }
-      if (name === 'ruta') { newFilters.circuito = ''; }
-      return newFilters;
-    });
+    setFilters(prev => ({ ...prev, [name]: value }));
   };
 
   const filteredPdv = useMemo(() => {
     return allPdv.filter(pdv => 
-      (!filters.sucursal || pdv.SUCURSAL === filters.sucursal) &&
-      (!filters.ruta || pdv.RUTA === filters.ruta) &&
-      (!filters.circuito || pdv.CIRCUITO === filters.circuito) &&
-      (filters.diasFrecuencia.length === 0 || filters.diasFrecuencia.includes(pdv.DIAS_FRECUENCIA))
+      (filters.SUCURSAL.length === 0 || filters.SUCURSAL.includes(pdv.SUCURSAL)) &&
+      (filters.RUTA.length === 0 || filters.RUTA.includes(pdv.RUTA)) &&
+      (filters.CIRCUITO.length === 0 || filters.CIRCUITO.includes(pdv.CIRCUITO)) &&
+      (filters.DIAS_FRECUENCIA.length === 0 || filters.DIAS_FRECUENCIA.includes(pdv.DIAS_FRECUENCIA))
     );
   }, [allPdv, filters]);
-
-  const filterOptions = useMemo(() => {
-    const sucursales = [...new Set(allPdv.map(p => p.SUCURSAL).filter(Boolean))].sort((a,b) => a.localeCompare(b));
-    const rutas = [...new Set(filteredPdv.map(p => p.RUTA).filter(Boolean))].sort((a,b) => a.localeCompare(b));
-    const circuitos = [...new Set(filteredPdv.map(p => p.CIRCUITO).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b)));
-    const diasFrecuencia = [...new Set(allPdv.map(p => p.DIAS_FRECUENCIA).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b)));
-    return { sucursales, rutas, circuitos, diasFrecuencia };
-  }, [allPdv, filteredPdv]);
 
   const summaryData = useMemo(() => ({
     sucursal: aggregateData(filteredPdv, 'SUCURSAL'),
@@ -184,6 +166,12 @@ const DashboardAliadosPage = () => {
     XLSX.writeFile(workbook, "DetallePdvAliados.xlsx");
   };
 
+  const getFilterData = (filterName) => {
+      if (filterName === 'RUTA') return allPdv.filter(pdv => filters.SUCURSAL.length === 0 || filters.SUCURSAL.includes(pdv.SUCURSAL));
+      if (filterName === 'CIRCUITO') return allPdv.filter(pdv => (filters.SUCURSAL.length === 0 || filters.SUCURSAL.includes(pdv.SUCURSAL)) && (filters.RUTA.length === 0 || filters.RUTA.includes(pdv.RUTA)));
+      return allPdv;
+  }
+
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>;
   }
@@ -194,49 +182,34 @@ const DashboardAliadosPage = () => {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Grid container spacing={2} justifyContent="center" sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Total Puntos (filtrados)</Typography><Typography variant="h4">{mainMetrics.total.toLocaleString()}</Typography></CardContent></Card></Grid>
-        <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Registrados</Typography><Typography variant="h4" color="success.main">{mainMetrics.registrados.toLocaleString()}</Typography></CardContent></Card></Grid>
-        <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Porcentaje</Typography><Typography variant="h4" color="primary.main">{`${mainMetrics.percentage.toFixed(2)}%`}</Typography></CardContent></Card></Grid>
+          <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Total Puntos (filtrados)</Typography><Typography variant="h4">{mainMetrics.total.toLocaleString()}</Typography></CardContent></Card></Grid>
+          <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Registrados</Typography><Typography variant="h4" color="success.main">{mainMetrics.registrados.toLocaleString()}</Typography></CardContent></Card></Grid>
+          <Grid item xs={12} sm={4}><Card sx={{ textAlign: 'center' }}><CardContent><Typography color="text.secondary">Porcentaje</Typography><Typography variant="h4" color="primary.main">{`${mainMetrics.percentage.toFixed(2)}%`}</Typography></CardContent></Card></Grid>
       </Grid>
 
       <Accordion sx={{ mb: 4, boxShadow: '0 2px 4px -1px rgba(0,0,0,0.2)' }}>
-          <AccordionSummary
-              expandIcon={<ExpandMoreIcon />}
-              aria-controls="filters-panel-content"
-              id="filters-panel-header"
-          >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="filters-panel-content" id="filters-panel-header">
               <Typography variant="h6">Filtros</Typography>
           </AccordionSummary>
           <AccordionDetails>
-              <Paper elevation={0} sx={{ p: 2, width: '100%' }}>
-                  <Grid container spacing={2} alignItems="center">
-                      <Grid item xs={12} sm={6} md={3}><FormControl fullWidth><InputLabel>Sucursal</InputLabel><Select name="sucursal" value={filters.sucursal} label="Sucursal" onChange={e => handleFilterChange('sucursal', e.target.value)}>{filterOptions.sucursales.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}</Select></FormControl></Grid>
-                      <Grid item xs={12} sm={6} md={3}><FormControl fullWidth><InputLabel>Ruta</InputLabel><Select name="ruta" value={filters.ruta} label="Ruta" onChange={e => handleFilterChange('ruta', e.target.value)}>{filterOptions.rutas.map(r => <MenuItem key={r} value={r}>{r}</MenuItem>)}</Select></FormControl></Grid>
-                      <Grid item xs={12} sm={6} md={3}><FormControl fullWidth><InputLabel>Circuito</InputLabel><Select name="circuito" value={filters.circuito} label="Circuito" onChange={e => handleFilterChange('circuito', e.target.value)}>{filterOptions.circuitos.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}</Select></FormControl></Grid>
-                      <Grid item xs={12} sm={6} md={3}>
-                        <FormControl fullWidth>
-                          <InputLabel>Día Frecuencia</InputLabel>
-                          <Select
-                            multiple
-                            name="diasFrecuencia"
-                            value={filters.diasFrecuencia}
-                            label="Día Frecuencia"
-                            onChange={e => handleFilterChange('diasFrecuencia', e.target.value)}
-                            renderValue={(selected) => (
-                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                {selected.map((value) => (
-                                  <Chip key={value} label={value} size="small" />
-                                ))}
-                              </Box>
-                            )}
-                          >
-                            {filterOptions.diasFrecuencia.map(d => <MenuItem key={d} value={d}>{d}</MenuItem>)}
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12} sm={12} md={12}><Button fullWidth variant="outlined" onClick={() => setFilters({ sucursal: '', ruta: '', circuito: '', diasFrecuencia: [] })}>Limpiar</Button></Grid>
+              <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                      <FilterControls
+                          headers={['SUCURSAL', 'RUTA', 'CIRCUITO', 'DIAS_FRECUENCIA']}
+                          filters={filters}
+                          onFilterChange={handleFilterChange}
+                          dataForOptions={{
+                              SUCURSAL: allPdv,
+                              RUTA: getFilterData('RUTA'),
+                              CIRCUITO: getFilterData('CIRCUITO'),
+                              DIAS_FRECUENCIA: allPdv,
+                          }}
+                      />
                   </Grid>
-              </Paper>
+                  <Grid item xs={12}>
+                      <Button fullWidth variant="outlined" onClick={() => setFilters({ SUCURSAL: [], RUTA: [], CIRCUITO: [], DIAS_FRECUENCIA: [] })}>Limpiar Filtros</Button>
+                  </Grid>
+              </Grid>
           </AccordionDetails>
       </Accordion>
 
@@ -271,31 +244,21 @@ const DashboardAliadosPage = () => {
             </TableHead>
             <TableBody>
               {finalDetailedData.map(pdv => (
-                <TableRow 
-                  key={pdv.id} 
-                  sx={{ 
-                    backgroundColor: circuitColorMap[pdv.CIRCUITO || 'Sin Asignar'],
-                    '&:hover': { backgroundColor: 'action.hover' } 
-                  }}
-                >
+                <TableRow key={pdv.id} sx={{ backgroundColor: circuitColorMap[pdv.CIRCUITO || 'Sin Asignar'], '&:hover': { backgroundColor: 'action.hover' } }}>
                   <TableCell>{pdv.MESA}</TableCell>
                   <TableCell>{pdv.RUTA}</TableCell>
                   <TableCell>{pdv.CIRCUITO}</TableCell>
                   <TableCell>{pdv.IDPDV}</TableCell>
                   <TableCell>{pdv.NOMBRE_PUNTO}</TableCell>
                   <TableCell align="center">
-                    <Chip 
-                      label={pdv.implementado_aliados ? '100%' : '0%'} 
-                      sx={pdv.implementado_aliados ? getStatusStyle(100) : getStatusStyle(0)} 
-                      size="small"
-                    />
+                    <Chip label={pdv.implementado_aliados ? '100%' : '0%'} sx={pdv.implementado_aliados ? getStatusStyle(100) : getStatusStyle(0)} size="small"/>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </TableContainer>
-        {finalDetailedData.length === 0 && <Typography sx={{textAlign: 'center', p: 4}}>No hay datos para mostrar con los filtros actuales.</Typography>}
+        {finalDetailedData.length === 0 && <Typography sx={{textAlign: 'center', p: 4}}>No hay datos para mostrar.</Typography>}
       </Paper>
     </Box>
   );

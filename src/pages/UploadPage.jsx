@@ -5,6 +5,7 @@ import {
   TableContainer, TableHead, TableRow, Tooltip, IconButton, LinearProgress, Divider, AlertTitle
 } from '@mui/material';
 import { getFirestore, collection, getDocs, writeBatch, doc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { useDropzone } from 'react-dropzone';
 import readXlsxFile from 'read-excel-file';
 import Papa from 'papaparse';
@@ -33,31 +34,26 @@ const UploadPage = () => {
   const [filters, setFilters] = useState([{ column: '', value: '' }]);
 
   const db = getFirestore();
+  const functions = getFunctions();
   
   const handleDeleteCollection = async (collectionName) => {
     const prettyName = collectionName.replace(/_/g, ' ');
-    if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de la colección "${prettyName}"? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de la colección \"${prettyName}\"? Esta acción no se puede deshacer y puede tardar varios minutos.`)) return;
 
     const deletingKey = collectionName === 'Base Pospago' ? 'base' : 'impl';
     setIsDeleting(prev => ({...prev, [deletingKey]: true}));
-    setDeleteMessage({type: '', text: ''});
+    setDeleteMessage({type: 'info', text: `Iniciando borrado de \"${prettyName}\"...`});
 
     try {
-        const querySnapshot = await getDocs(collection(db, collectionName));
-        const totalDocs = querySnapshot.size;
-        if (totalDocs === 0) {
-            setDeleteMessage({type: 'success', text: `La colección "${prettyName}" ya está vacía.`});
-            return;
-        }
-        const batch = writeBatch(db);
-        querySnapshot.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
-        setDeleteMessage({type: 'success', text: `¡Éxito! Se han borrado ${totalDocs} registros de "${prettyName}".`});
+        const deleteCollection = httpsCallable(functions, 'deleteAllDocumentsInCollection');
+        await deleteCollection({ collectionPath: collectionName });
+
+        setDeleteMessage({type: 'success', text: `¡Éxito! Se ha iniciado el borrado de \"${prettyName}\".`});
         if (collectionName === 'Implementacion Pospago') resetImplementationState();
         if (collectionName === 'Base Pospago') setMasterPdvIds(new Set());
-        setUploaderKey(prev => prev + 1); // Force re-render of children
+        setUploaderKey(prev => prev + 1);
     } catch (err) {
-        setDeleteMessage({type: 'error', text: err.message || `Ocurrió un error al borrar "${prettyName}".`});
+        setDeleteMessage({type: 'error', text: err.message || `Ocurrió un error al invocar la función de borrado para \"${prettyName}\".`});
     } finally {
         setIsDeleting(prev => ({...prev, [deletingKey]: false}));
     }
@@ -131,7 +127,7 @@ const UploadPage = () => {
 
   const handleUpload = async () => {
     setUploading(true); setUploadError(null); setUploadSuccess(null); setUploadProgress(0);
-    const rowsToUpload = filteredRows.filter(row => validationStatus[fileRows.indexOf(row)]);
+    const rowsToUpload = filteredRows.filter(row => validationStatus[fileRows.indexOf(row) + 1]);
     const dataToUpload = rowsToUpload.map(row => {
         let obj = {};
         fileHeaders.forEach((header, i) => { obj[header] = row[i]; });
@@ -167,11 +163,11 @@ const UploadPage = () => {
   const handleFilterChange = (index, field, value) => setFilters(filters.map((f, i) => i === index ? { ...f, [field]: value } : f));
   const addFilter = () => setFilters([...filters, { column: '', value: '' }]);
   const removeFilter = (index) => setFilters(filters.filter((_, i) => i !== index));
-  const validFilteredRowsCount = filteredRows.filter(row => validationStatus[fileRows.indexOf(row)]).length;
+  const validFilteredRowsCount = filteredRows.filter(row => validationStatus[fileRows.indexOf(row) + 1]).length;
 
   return (
     <Container maxWidth="xl" sx={{ mt: 2, mb: 4 }}>
-      <Typography variant="h4" gutterBottom align="center">Carga y Análisis de Datos</Typography>
+      <Typography variant="h4" gutterBottom align="center">Carga y Análisis de Datos (Pospago)</Typography>
       <Grid container spacing={2}>
         <Grid item xs={12} md={3}>
           <Paper elevation={3} sx={{ p: 2, position: 'sticky', top: 20 }}>
@@ -198,7 +194,7 @@ const UploadPage = () => {
               <List dense>
                 <ListItem>
                   <ListItemIcon><CheckCircle color="success" /></ListItemIcon>
-                  <ListItemText primary={implementationFile.name} secondary={`${fileRows.length - 1} registros encontrados`} />
+                  <ListItemText primary={implementationFile.name} secondary={`${fileRows.length > 0 ? fileRows.length - 1 : 0} registros encontrados`} />
                 </ListItem>
               </List>
             )}
@@ -259,7 +255,7 @@ const UploadPage = () => {
                 <TableHead><TableRow><TableCell sx={{position: 'sticky', left: 0, zIndex: 10, background: 'white'}}>Diagnóstico</TableCell>{fileHeaders.map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead>
                 <TableBody>
                   {filteredRows.slice(0, PREVIEW_ROWS).map((row, rowIndex) => {
-                    const originalIndex = fileRows.indexOf(row);
+                    const originalIndex = fileRows.indexOf(row) + 1;
                     const isValid = validationStatus[originalIndex];
                     const rowStyle = !selectedPdvIdColumn ? {} : (isValid ? { backgroundColor: 'rgba(200, 255, 200, 0.2)' } : { backgroundColor: 'rgba(255, 200, 200, 0.3)' });
                     return (

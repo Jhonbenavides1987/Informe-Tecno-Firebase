@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
-  Box, Button, Container, Typography, Alert, Paper, Grid, List, ListItem, ListItemIcon, 
-  ListItemText, Select, MenuItem, FormControl, InputLabel, TextField, Table, TableBody, TableCell, 
+  Box, Button, Container, Typography, Alert, Paper, Grid, List, ListItem, ListItemIcon,
+  ListItemText, Select, MenuItem, FormControl, InputLabel, TextField, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Tooltip, IconButton, LinearProgress, Divider, AlertTitle
 } from '@mui/material';
 import { getFirestore, collection, getDocs, writeBatch, doc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { useDropzone } from 'react-dropzone';
 import readXlsxFile from 'read-excel-file';
 import Papa from 'papaparse';
@@ -15,7 +16,7 @@ import DataUploader from '../components/DataUploader';
 const PREVIEW_ROWS = 100;
 
 const UploadAliadosPage = () => {
-  // State
+  // --- State ---
   const [uploaderKey, setUploaderKey] = useState(0);
   const [isDeleting, setIsDeleting] = useState({base: false, impl: false});
   const [deleteMessage, setDeleteMessage] = useState({type: '', text: ''});
@@ -32,46 +33,30 @@ const UploadAliadosPage = () => {
   const [filters, setFilters] = useState([{ column: '', value: '' }]);
 
   const db = getFirestore();
-  
+  const functions = getFunctions();
+
+  // --- Core Functions ---
+
   const handleDeleteCollection = async (collectionName) => {
     const prettyName = collectionName.replace(/_/g, ' ');
-    if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de la colección "${prettyName}"? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de la colección \"${prettyName}\"? Esta acción no se puede deshacer y puede tardar varios minutos.`)) return;
 
     const deletingKey = collectionName === 'Base Prepago' ? 'base' : 'impl';
     setIsDeleting(prev => ({...prev, [deletingKey]: true}));
-    setDeleteMessage({type: 'info', text: `Iniciando borrado de "${prettyName}"...`});
+    setDeleteMessage({type: 'info', text: `Iniciando borrado de \"${prettyName}\"...`});
 
     try {
-        const querySnapshot = await getDocs(collection(db, collectionName));
-        const totalDocs = querySnapshot.size;
-        
-        if (totalDocs === 0) {
-            setDeleteMessage({type: 'success', text: `La colección "${prettyName}" ya está vacía.`});
-            setIsDeleting(prev => ({...prev, [deletingKey]: false}));
-            return;
-        }
+        const deleteCollection = httpsCallable(functions, 'deleteAllDocumentsInCollection');
+        await deleteCollection({ collectionPath: collectionName });
 
-        const batchSize = 499; // Firestore limit is 500 writes per batch
-        const docs = querySnapshot.docs;
-        let docsDeleted = 0;
-
-        for (let i = 0; i < totalDocs; i += batchSize) {
-            const batch = writeBatch(db);
-            const chunk = docs.slice(i, i + batchSize);
-            chunk.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-            docsDeleted += chunk.length;
-            setDeleteMessage({type: 'info', text: `Borrando... ${docsDeleted} de ${totalDocs} registros.`});
-        }
-
-        setDeleteMessage({type: 'success', text: `¡Éxito! Se han borrado ${totalDocs} registros de "${prettyName}".`});
+        setDeleteMessage({type: 'success', text: `¡Éxito! Se ha iniciado el borrado de \"${prettyName}\".`});
         
         if (collectionName === 'Implementacion Aliados') resetImplementationState();
         if (collectionName === 'Base Prepago') setMasterPdvIds(new Set());
         
         setUploaderKey(prev => prev + 1); // Force re-render of children
     } catch (err) {
-        setDeleteMessage({type: 'error', text: err.message || `Ocurrió un error al borrar "${prettyName}".`});
+        setDeleteMessage({type: 'error', text: err.message || `Ocurrió un error al invocar la función de borrado para \"${prettyName}\".`});
     } finally {
         setIsDeleting(prev => ({...prev, [deletingKey]: false}));
     }
@@ -91,7 +76,7 @@ const UploadAliadosPage = () => {
 
   const resetImplementationState = () => {
     setImplementationFile(null); setFileHeaders([]); setFileRows([]);
-    setSelectedPdvIdColumn(''); setUploadError(null); setUploadSuccess(null); 
+    setSelectedPdvIdColumn(''); setUploadError(null); setUploadSuccess(null);
     setValidationStatus({}); setFilters([{ column: '', value: '' }]);
   };
 
@@ -116,7 +101,7 @@ const UploadAliadosPage = () => {
     } catch (err) {
       setUploadError(err.message || 'Error al procesar el archivo.');
     }
-  }, [resetImplementationState, parseFile]);
+  }, []);
 
   useEffect(() => {
     if (selectedPdvIdColumn && fileRows.length > 0 && masterPdvIds.size > 0) {
@@ -140,7 +125,7 @@ const UploadAliadosPage = () => {
           return cellValue.includes(filter.value.toLowerCase());
       });
   }), [fileRows, filters, fileHeaders]);
-  
+
   const validFilteredRowsCount = useMemo(() => filteredRows.filter((row, index) => validationStatus[fileRows.indexOf(row)]).length, [filteredRows, validationStatus, fileRows]);
 
   const uniqueValidRowsToUpload = useMemo(() => {
@@ -211,7 +196,7 @@ const UploadAliadosPage = () => {
           <Paper elevation={3} sx={{ p: 2, position: 'sticky', top: 20 }}>
             <Typography variant="h6" gutterBottom>1. Cargar Archivos (Aliados)</Typography>
             {deleteMessage.text && <Alert severity={deleteMessage.type} sx={{mb: 2}}>{deleteMessage.text}</Alert>}
-            
+
             <Typography variant="body1" sx={{fontWeight: 'bold'}}>Base Maestra (Compartida)</Typography>
             <DataUploader key={`uploader-aliados-${uploaderKey}`} collectionName="Base Prepago" onUploadSuccess={fetchMasterPdvIds}/>
             <Button fullWidth variant="contained" color="error" size="small" onClick={() => handleDeleteCollection('Base Prepago')} sx={{ mt: 1 }} disabled={isDeleting.base} startIcon={<DeleteForever />}>
@@ -274,17 +259,17 @@ const UploadAliadosPage = () => {
               ))}
               <Button startIcon={<AddCircleOutline />} onClick={addFilter} disabled={!implementationFile}>Añadir Filtro</Button>
             </Box>
-            
+
             <Alert severity="info" sx={{my: 1}}>
               Mostrando {Math.min(filteredRows.length, PREVIEW_ROWS)} de {filteredRows.length} filas que coinciden con los filtros. <br/>
               De estas, <strong>{validFilteredRowsCount} filas son válidas</strong> (tienen ✅). <br/>
               Se cargarán <strong>{uniqueValidRowsCount} registros únicos</strong> (basado en la columna de ID de PDV).
             </Alert>
-            
+
             {uploadError && <Alert severity="error" sx={{ my: 1, whiteSpace: 'pre-wrap' }}>{uploadError}</Alert>}
             {uploadSuccess && <Alert severity="success" sx={{ my: 1 }}>{uploadSuccess}</Alert>}
             {uploading && <LinearProgress variant="determinate" value={uploadProgress} sx={{my: 1}}/>}
-            
+
             <Button variant="contained" size="large" fullWidth onClick={handleUpload} disabled={!selectedPdvIdColumn || uploading || uniqueValidRowsCount === 0}>
               {uploading ? `Cargando... ${Math.round(uploadProgress)}%` : `Iniciar Carga de ${uniqueValidRowsCount} Registros Únicos`}
             </Button>

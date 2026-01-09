@@ -5,6 +5,7 @@ import {
   TableContainer, TableHead, TableRow, Tooltip, IconButton, LinearProgress, Divider, AlertTitle
 } from '@mui/material';
 import { getFirestore, collection, getDocs, writeBatch, doc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { useDropzone } from 'react-dropzone';
 import readXlsxFile from 'read-excel-file';
 import Papa from 'papaparse';
@@ -33,31 +34,28 @@ const UploadActivacionPage = () => {
   const [filters, setFilters] = useState([{ column: '', value: '' }]);
 
   const db = getFirestore();
+  const functions = getFunctions();
   
   const handleDeleteCollection = async (collectionName) => {
     const prettyName = collectionName.replace(/_/g, ' ');
-    if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de la colección "${prettyName}"? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Estás seguro de que quieres borrar TODOS los registros de la colección \"${prettyName}\"? Esta acción no se puede deshacer y puede tardar varios minutos.`)) return;
 
     const deletingKey = collectionName === 'Base Prepago' ? 'base' : 'impl';
     setIsDeleting(prev => ({...prev, [deletingKey]: true}));
-    setDeleteMessage({type: '', text: ''});
+    setDeleteMessage({type: 'info', text: `Iniciando borrado de \"${prettyName}\"...`});
 
     try {
-        const querySnapshot = await getDocs(collection(db, collectionName));
-        const totalDocs = querySnapshot.size;
-        if (totalDocs === 0) {
-            setDeleteMessage({type: 'success', text: `La colección "${prettyName}" ya está vacía.`});
-            return;
-        }
-        const batch = writeBatch(db);
-        querySnapshot.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
-        setDeleteMessage({type: 'success', text: `¡Éxito! Se han borrado ${totalDocs} registros de "${prettyName}".`});
+        const deleteCollection = httpsCallable(functions, 'deleteAllDocumentsInCollection');
+        await deleteCollection({ collectionPath: collectionName });
+
+        setDeleteMessage({type: 'success', text: `¡Éxito! Se ha iniciado el borrado de \"${prettyName}\".`});
+        
         if (collectionName === 'Implementacion Activacion') resetImplementationState();
         if (collectionName === 'Base Prepago') setMasterPdvIds(new Set());
+        
         setUploaderKey(prev => prev + 1); // Force re-render of children
     } catch (err) {
-        setDeleteMessage({type: 'error', text: err.message || `Ocurrió un error al borrar "${prettyName}".`});
+        setDeleteMessage({type: 'error', text: err.message || `Ocurrió un error al invocar la función de borrado para \"${prettyName}\".`});
     } finally {
         setIsDeleting(prev => ({...prev, [deletingKey]: false}));
     }
